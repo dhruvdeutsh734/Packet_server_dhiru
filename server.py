@@ -342,11 +342,23 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json({"error": "not found"}, 404)
 
 
+# def main():
+#     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
+#     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+#     print(f"NRM Packet Sender bridge running at http://127.0.0.1:{port}")
+#     print("Open that URL in your browser. Press Ctrl+C to stop.")
+#     try:
+#         server.serve_forever()
+#     except KeyboardInterrupt:
+#         print("\nShutting down...")
+#         server.shutdown()
 def main():
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"NRM Packet Sender bridge running at http://127.0.0.1:{port}")
-    print("Open that URL in your browser. Press Ctrl+C to stop.")
+    # Render passes a dynamic PORT env var (defaults to 8765 for local dev)
+    port = int(os.environ.get("PORT", sys.argv[1] if len(sys.argv) > 1 else 8765))
+    
+    # Must bind to 0.0.0.0 for Cloud hosts
+    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    print(f"NRM Packet Sender bridge running on port {port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
