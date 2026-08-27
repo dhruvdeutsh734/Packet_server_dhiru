@@ -1,0 +1,2139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NRM Packet Sender</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ==========================================================================
+   DESIGN TOKENS — premium technical-tool palette
+   Accent: indigo (not the generic "AI blue") · Data font: JetBrains Mono ·
+   UI font: Inter · Elevation via layered shadows instead of flat borders.
+   ========================================================================== */
+:root{
+  --bg-app:#eef1f8;
+  --bg-panel:#ffffff;
+  --bg-panel-2:#f7f8fc;
+  --bg-input:#f8f9fd;
+  --border:#e3e6f0;
+  --border-soft:#edeff6;
+  --text-main:#131629;
+  --text-dim:#5c6178;
+  --text-faint:#9297ab;
+  --blue:#4f46e5;
+  --blue-soft:#4338ca;
+  --green:#059669;
+  --green-dim:#047857;
+  --red:#e11d48;
+  --amber:#d97706;
+  --purple:#7c3aed;
+  --cyan:#0891b2;
+  --radius:10px;
+  --radius-sm:7px;
+  --shadow-xs:0 1px 2px rgba(19,22,41,0.04);
+  --shadow-sm:0 1px 3px rgba(19,22,41,0.06), 0 1px 2px rgba(19,22,41,0.04);
+  --shadow-md:0 4px 14px rgba(19,22,41,0.07), 0 1px 3px rgba(19,22,41,0.05);
+  --shadow-lg:0 12px 32px rgba(19,22,41,0.10), 0 2px 8px rgba(19,22,41,0.06);
+  --font-ui:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+  --font-mono:'JetBrains Mono','Consolas','Courier New',monospace;
+}
+*{box-sizing:border-box;}
+::-webkit-scrollbar{width:9px;height:9px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:#d4d8e6;border-radius:5px;}
+::-webkit-scrollbar-thumb:hover{background:#b8bed3;}
+html,body{
+  margin:0;padding:0;
+  background:var(--bg-app);
+  color:var(--text-main);
+  font-family:var(--font-ui);
+  font-size:14px;
+  height:100%;
+  -webkit-font-smoothing:antialiased;
+}
+.titlebar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:11px 20px;
+  background:var(--bg-panel);
+  border-bottom:1px solid var(--border-soft);
+  box-shadow:0 1px 0 rgba(19,22,41,0.03), 0 2px 8px rgba(19,22,41,0.03);
+  position:relative;z-index:5;
+}
+.titlebar-left{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;letter-spacing:-0.01em;}
+.titlebar-left svg{color:var(--blue);}
+.win-controls{display:flex;align-items:center;gap:18px;color:var(--text-dim);}
+.win-controls span{cursor:pointer;font-size:14px;transition:color .12s;}
+.win-controls span:hover{color:var(--text-main);}
+.win-controls .close:hover{color:var(--red);}
+
+/* ==========================================================================
+   SIDEBAR (LEFT PANEL) OPEN / CLOSE
+   The left column's width is driven by a CSS custom property (--col-left-w).
+   Clicking the toggle button (#sidebarToggleBtn, in the titlebar) runs
+   `toggleSidebar()` in the JS, which adds/removes the ".sidebar-collapsed"
+   class on .app — collapsing the left column down to 0 width and hiding its
+   contents, and giving that space back to the middle column.
+   ========================================================================== */
+:root{
+  --col-left-w: 400px;
+  --col-third-w: 360px;
+}
+.app{
+  display:grid;
+  grid-template-columns: var(--col-left-w) 1fr var(--col-third-w);
+  gap:16px;
+  padding:16px;
+  align-items:start;
+  transition:grid-template-columns .2s ease;
+}
+.col-left{display:flex;flex-direction:column;gap:14px;min-width:0;overflow:hidden;}
+.col-right{display:flex;flex-direction:column;gap:14px;min-width:0;}
+.col-third{display:flex;flex-direction:column;gap:14px;min-width:0;}
+
+.app.sidebar-collapsed{
+  grid-template-columns: 0px 1fr var(--col-third-w);
+  padding-left:0;
+  gap:0 16px;
+}
+.app.sidebar-collapsed .col-left{
+  display:none;
+}
+
+#sidebarToggleBtn{
+  display:flex;align-items:center;justify-content:center;
+  width:30px;height:30px;
+  border:1px solid var(--border);
+  background:var(--bg-panel-2);
+  border-radius:6px;
+  cursor:pointer;
+  color:var(--text-dim);
+  margin-right:4px;
+  padding:0;
+  outline:none;
+  font-family:inherit;
+}
+#sidebarToggleBtn:hover{ color:var(--blue); border-color:var(--blue); }
+
+@media (max-width: 1400px){
+  :root{ --col-left-w: 360px; --col-third-w: 340px; }
+  .app{gap:14px;padding:14px;}
+  .app.sidebar-collapsed{gap:0 14px;}
+}
+@media (max-width: 1180px){
+  .app{grid-template-columns: var(--col-left-w) 1fr;}
+  .app.sidebar-collapsed{grid-template-columns: 0px 1fr;}
+  .col-third{grid-column:1 / -1;}
+}
+@media (max-width: 760px){
+  .app{grid-template-columns:1fr;padding:12px;gap:12px;}
+  .app.sidebar-collapsed{grid-template-columns:1fr;}
+  .app.sidebar-collapsed .col-left{display:flex;}
+  .col-third{grid-column:auto;}
+  .field-row{grid-template-columns:1fr;}
+  .stat-pills{gap:8px;}
+  .send-settings-row{flex-direction:column;align-items:stretch;}
+}
+
+.panel{
+  background:var(--bg-panel);
+  border:1px solid var(--border-soft);
+  border-radius:var(--radius);
+  overflow:hidden;
+  box-shadow:var(--shadow-sm);
+  transition:box-shadow .2s ease;
+}
+.panel:hover{box-shadow:var(--shadow-md);}
+.panel-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:13px 16px;
+  font-weight:700;
+  font-size:14px;
+  letter-spacing:-0.01em;
+  border-bottom:1px solid var(--border-soft);
+  cursor:default;
+  user-select:none;
+}
+.panel-header .htitle{display:flex;align-items:center;gap:9px;}
+.panel-header .chev{color:var(--text-faint);font-size:12px;transition:transform .15s;}
+.panel-body{padding:16px;}
+
+label.field-label{
+  display:block;font-size:12.5px;color:var(--text-dim);margin-bottom:6px;font-weight:600;
+  letter-spacing:.01em;
+}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;}
+.input-wrap{
+  position:relative;display:flex;align-items:center;
+  background:var(--bg-input);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  padding:0 10px;
+  height:37px;
+  transition:border-color .15s, box-shadow .15s;
+}
+.input-wrap:focus-within{
+  border-color:var(--blue);
+  box-shadow:0 0 0 3px rgba(79,70,229,0.12);
+}
+.input-wrap svg{color:var(--text-faint);flex-shrink:0;margin-right:8px;}
+.input-wrap input{
+  background:transparent;border:none;outline:none;
+  color:var(--text-main);width:100%;font-size:13.5px;font-family:var(--font-mono);
+}
+.input-wrap.number{padding-right:4px;}
+.spin-btns{display:flex;flex-direction:column;margin-left:6px;}
+.spin-btns span{
+  color:var(--text-faint);font-size:9px;cursor:pointer;line-height:1;padding:2px 3px;
+}
+.spin-btns span:hover{color:var(--blue);}
+
+.status-line{
+  display:flex;align-items:center;gap:8px;
+  background:rgba(5,150,105,0.08);
+  border:1px solid rgba(5,150,105,0.22);
+  color:var(--green);
+  border-radius:var(--radius-sm);
+  padding:9px 12px;
+  font-size:13px;
+  flex:1;
+}
+.status-row{display:flex;gap:10px;align-items:stretch;}
+.btn{
+  border:1px solid var(--border);
+  background:var(--bg-panel-2);
+  color:var(--text-main);
+  border-radius:var(--radius-sm);
+  padding:9px 14px;
+  font-size:13px;
+  font-weight:500;
+  cursor:pointer;
+  display:flex;align-items:center;gap:7px;
+  white-space:nowrap;
+  transition:background .12s,border-color .12s,box-shadow .12s,transform .08s;
+  font-family:var(--font-ui);
+}
+.btn:hover{background:#f1f2f9;border-color:#d1d5e6;box-shadow:var(--shadow-xs);}
+.btn:active{transform:translateY(1px);}
+.btn.blue-outline{color:var(--blue);border-color:rgba(79,70,229,0.35);background:rgba(79,70,229,0.06);}
+.btn.blue-outline:hover{background:rgba(79,70,229,0.13);border-color:rgba(79,70,229,0.5);}
+.btn:disabled{opacity:0.45;cursor:not-allowed;}
+
+textarea.packet-input{
+  width:100%;
+  min-height:130px;
+  background:var(--bg-input);
+  border:1px solid rgba(5,150,105,0.3);
+  border-radius:var(--radius-sm);
+  color:var(--green-dim);
+  font-family:var(--font-mono);
+  font-size:12.5px;
+  line-height:1.6;
+  padding:10px;
+  resize:vertical;
+  outline:none;
+}
+.packet-input:focus{border-color:var(--green);}
+.field-foot{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-top:8px;font-size:12.5px;color:var(--text-dim);
+}
+.field-foot .valid{color:var(--green);display:flex;align-items:center;gap:5px;}
+
+.send-settings-row{
+  display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap;
+}
+.duration-box{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.duration-input{
+  display:flex;align-items:center;background:var(--bg-input);border:1px solid var(--border);
+  border-radius:6px;height:36px;padding:0 8px;width:70px;
+}
+.duration-input input{background:transparent;border:none;color:var(--text-main);width:100%;outline:none;font-size:13.5px;}
+select.unit-select{
+  background:var(--bg-input);border:1px solid var(--border);color:var(--text-main);
+  border-radius:6px;height:36px;padding:0 10px;font-size:13px;outline:none;
+}
+.checkbox-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-main);}
+.checkbox-row input{width:15px;height:15px;accent-color:var(--blue);}
+
+.action-row{display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;}
+.action-row .btn{flex:1 1 130px;}
+.btn.start{
+  background:linear-gradient(180deg,#10b981,var(--green));
+  border-color:var(--green-dim);color:#fff;justify-content:center;font-weight:600;
+  box-shadow:0 2px 8px rgba(5,150,105,0.28);
+}
+.btn.start:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 4px 12px rgba(5,150,105,0.35);}
+.btn.start:disabled{background:var(--bg-panel-2);color:var(--text-faint);border-color:var(--border);box-shadow:none;}
+.btn.stop{background:rgba(225,29,72,0.10);border-color:rgba(225,29,72,0.32);color:var(--red);justify-content:center;font-weight:600;}
+.btn.stop:hover:not(:disabled){background:rgba(225,29,72,0.18);}
+.btn.clear{justify-content:center;}
+
+.preview-grid{display:flex;flex-direction:column;gap:10px;}
+.preview-row{display:flex;justify-content:space-between;font-size:13.5px;}
+.preview-row .k{color:var(--text-dim);}
+.preview-row .v{color:var(--green-dim);font-weight:700;font-family:var(--font-mono);}
+.update-btn{
+  margin-top:10px;width:100%;
+  justify-content:center;
+}
+
+/* RIGHT SIDE */
+.conn-panel{
+  background:var(--bg-panel);border:1px solid var(--border-soft);border-radius:var(--radius);
+  padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+  box-shadow:var(--shadow-sm);
+}
+.conn-left{display:flex;flex-direction:column;gap:6px;}
+.conn-left .lbl{color:var(--text-dim);font-size:12.5px;font-weight:600;}
+.conn-status{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px rgba(5,150,105,0.16);animation:dot-pulse 2s ease-in-out infinite;}
+.dot.off{background:var(--red);box-shadow:0 0 0 4px rgba(225,29,72,0.14);animation:none;}
+@keyframes dot-pulse{
+  0%,100%{box-shadow:0 0 0 4px rgba(5,150,105,0.16);}
+  50%{box-shadow:0 0 0 7px rgba(5,150,105,0.06);}
+}
+.conn-status .addr{color:var(--text-dim);font-weight:400;font-size:13.5px;font-family:var(--font-mono);}
+.conn-buttons{display:flex;gap:10px;}
+.btn.connect{color:var(--blue);border-color:rgba(79,70,229,0.35);background:rgba(79,70,229,0.08);}
+.btn.connect:hover:not(:disabled){background:rgba(79,70,229,0.16);}
+.btn.disconnect{color:#fff;background:linear-gradient(180deg,#f43f5e,var(--red));border-color:#be123c;box-shadow:0 2px 8px rgba(225,29,72,0.25);}
+.btn.disconnect:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 4px 12px rgba(225,29,72,0.32);}
+
+.log-panel{
+  background:var(--bg-panel);border:1px solid var(--border-soft);border-radius:var(--radius);
+  display:flex;flex-direction:column;
+  flex:1;
+  min-height:420px;
+  box-shadow:var(--shadow-sm);
+}
+.tabs-row{
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border-soft);
+  padding:0 16px;
+}
+.tabs{display:flex;gap:22px;}
+.tab{
+  padding:13px 2px;color:var(--text-dim);font-size:13.5px;cursor:pointer;
+  border-bottom:2px solid transparent;display:flex;align-items:center;gap:6px;font-weight:500;
+  transition:color .12s;
+}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue);font-weight:700;}
+.tab:hover:not(.active){color:var(--text-main);}
+.clear-all-btn{
+  display:flex;align-items:center;gap:6px;color:var(--text-dim);font-size:13px;font-weight:500;
+  border:1px solid var(--border);padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;background:var(--bg-panel-2);
+  transition:color .12s,border-color .12s;
+}
+.clear-all-btn:hover{color:var(--text-main);border-color:#c7cbe0;}
+
+.log-table-wrap{flex:1;overflow-y:auto;max-height:420px;}
+table.log-table{width:100%;border-collapse:collapse;font-size:13px;}
+.log-table thead th{
+  position:sticky;top:0;background:var(--bg-panel);
+  text-align:left;padding:10px 16px;color:var(--text-dim);font-weight:700;
+  border-bottom:1px solid var(--border-soft);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;
+}
+.log-table tbody td{
+  padding:9px 16px;border-bottom:1px solid var(--border-soft);
+  color:var(--text-main);white-space:nowrap;
+}
+.log-table tbody tr{transition:background .1s;}
+.log-table tbody tr:hover{background:var(--bg-panel-2);}
+td.msg-col{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:1px;font-family:var(--font-mono);font-size:12.5px;}
+td.time-col{color:var(--text-dim);font-family:var(--font-mono);font-size:12.5px;}
+
+.badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:3px 9px;border-radius:5px;font-size:11px;font-weight:700;letter-spacing:.3px;
+  font-family:var(--font-mono);
+}
+.badge.info{background:rgba(79,70,229,0.13);color:var(--blue);}
+.badge.tx{background:rgba(5,150,105,0.13);color:var(--green);}
+.badge.rx{background:rgba(8,145,178,0.13);color:var(--cyan);}
+.badge.system{background:rgba(124,58,237,0.15);color:var(--purple);}
+.badge.send{background:rgba(5,150,105,0.16);color:var(--green);}
+.badge.receive{background:rgba(8,145,178,0.16);color:var(--cyan);}
+.msg-tx{color:var(--green-dim);}
+.msg-rx{color:var(--cyan);}
+.msg-info{color:var(--text-main);}
+
+/* Last packet panel */
+.lastpkt-panel{background:var(--bg-panel);border:1px solid var(--border-soft);border-radius:var(--radius);box-shadow:var(--shadow-sm);}
+.lastpkt-tabs{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--border-soft);}
+.lastpkt-tabs .lp-tabs-left{display:flex;gap:22px;}
+.lastpkt-tabs .lp-tabs-left .lp-tab{padding-top:1px;}
+.stat-pills{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.stat-pill{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:5px 12px;border-radius:20px;border:1px solid;
+  font-size:12px;color:var(--text-dim);background:var(--bg-panel);white-space:nowrap;
+  box-shadow:var(--shadow-xs);
+}
+.stat-pill .pv{font-weight:700;font-family:var(--font-mono);}
+.stat-pill.p-green{border-color:rgba(5,150,105,0.4);}
+.stat-pill.p-green .pv{color:var(--green);}
+.stat-pill.p-blue{border-color:rgba(79,70,229,0.4);}
+.stat-pill.p-blue .pv{color:var(--green);}
+.stat-pill.p-red{border-color:rgba(225,29,72,0.4);}
+.stat-pill.p-red .pv{color:var(--red);}
+.stat-pill.p-violet{border-color:rgba(124,58,237,0.4);}
+.stat-pill.p-violet .pv{color:var(--text-main);}
+.stat-pill.p-amber{border-color:rgba(217,119,6,0.4);}
+.stat-pill.p-amber .pv{color:var(--amber);}
+.lp-tab{padding-bottom:11px;color:var(--text-dim);font-size:13.5px;cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:color .12s;}
+.lp-tab:hover{color:var(--text-main);}
+.lp-tab.active{color:var(--blue);border-bottom-color:var(--blue);font-weight:700;}
+.lastpkt-body{display:flex;gap:14px;padding:16px;align-items:flex-start;}
+.lastpkt-text{
+  flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:12px;font-family:var(--font-mono);font-size:12.5px;line-height:1.7;color:var(--text-main);
+  word-break:break-all;
+}
+.copy-btn{
+  display:flex;align-items:center;gap:7px;white-space:nowrap;align-self:flex-start;
+}
+
+.stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;}
+.stat-card{
+  background:var(--bg-panel);border:1px solid var(--border-soft);border-radius:var(--radius);
+  padding:14px 16px;box-shadow:var(--shadow-sm);
+}
+.stat-card .stat-lbl{display:flex;align-items:center;gap:7px;color:var(--text-dim);font-size:12.5px;margin-bottom:8px;font-weight:600;}
+.stat-card .stat-val{font-size:22px;font-weight:800;font-family:var(--font-mono);letter-spacing:-0.02em;}
+.stat-val.green{color:var(--green);}
+.stat-val.blue{color:var(--blue);}
+.stat-val.red{color:var(--red);}
+.stat-val.white{color:var(--text-main);}
+.stat-val.amber{color:var(--amber);}
+
+.statusbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 20px;border-top:1px solid var(--border-soft);
+  background:var(--bg-panel);
+  font-size:13px;color:var(--text-dim);
+  box-shadow:0 -2px 8px rgba(19,22,41,0.03);
+}
+.statusbar-left{display:flex;align-items:center;gap:6px;color:var(--blue);font-weight:500;}
+.statusbar-right{display:flex;align-items:center;gap:22px;}
+.statusbar-right label{display:flex;align-items:center;gap:6px;color:var(--text-dim);cursor:pointer;}
+.statusbar-right select{
+  background:var(--bg-panel-2);border:1px solid var(--border);color:var(--text-main);
+  border-radius:5px;padding:4px 8px;font-size:12.5px;
+}
+.chk{width:14px;height:14px;accent-color:var(--blue);}
+
+.icon-btn-inline{display:inline-flex;align-items:center;}
+
+/* Parsed Packet Info */
+.ptype-badge{
+  display:inline-flex;align-items:center;padding:3px 10px;border-radius:4px;
+  font-size:11px;font-weight:700;letter-spacing:.3px;background:rgba(59,130,246,0.16);color:var(--blue);
+}
+.parsed-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;margin-top:12px;}
+.parsed-row{display:flex;justify-content:space-between;font-size:13px;gap:8px;border-bottom:1px dashed var(--border-soft);padding-bottom:5px;}
+.parsed-row .k{color:var(--text-dim);white-space:nowrap;}
+.parsed-row .v{color:var(--text-main);font-family:var(--font-mono);font-size:12.5px;text-align:right;word-break:break-all;}
+.parsed-empty{color:var(--text-faint);font-size:13px;padding:6px 0;}
+
+/* Alert list */
+.alert-list{display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto;padding-right:4px;}
+.alert-item{
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:9px 12px;gap:10px;transition:border-color .12s, box-shadow .12s;
+}
+.alert-item:hover{border-color:#c7cbe0;box-shadow:var(--shadow-xs);}
+.alert-item .ainfo{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.alert-item .aid{font-size:11px;color:var(--text-faint);font-family:var(--font-mono);font-weight:600;}
+.alert-item .alabel{font-size:13px;color:var(--text-main);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500;}
+.alert-send-btn{
+  flex-shrink:0;padding:6px 14px;font-size:12px;font-weight:600;border-radius:var(--radius-sm);
+  background:rgba(79,70,229,0.12);border:1px solid rgba(79,70,229,0.35);color:var(--blue);cursor:pointer;
+  transition:background .12s,transform .08s;
+}
+.alert-send-btn:hover{background:rgba(79,70,229,0.22);}
+.alert-send-btn:active{transform:translateY(1px);}
+.alert-send-btn.sent{background:rgba(5,150,105,0.16);border-color:rgba(5,150,105,0.4);color:var(--green);}
+
+/* Emergency */
+.emergency-box{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+.emergency-status{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--text-dim);font-weight:500;}
+.emergency-dot{width:9px;height:9px;border-radius:50%;background:var(--text-faint);}
+.emergency-dot.active{background:var(--red);box-shadow:0 0 8px rgba(225,29,72,0.5);animation:pulse-red 1s infinite;}
+@keyframes pulse-red{0%,100%{opacity:1;}50%{opacity:.4;}}
+.btn.emergency-on{background:rgba(225,29,72,0.11);border-color:rgba(225,29,72,0.35);color:var(--red);flex:1;justify-content:center;font-weight:700;}
+.btn.emergency-on:hover{background:rgba(239,68,68,0.24);}
+.btn.emergency-on.active{background:linear-gradient(180deg,#ef4444,#dc2626);color:#fff;border-color:#dc2626;}
+</style>
+</head>
+<body>
+
+<div class="titlebar">
+  <div class="titlebar-left">
+    <button id="sidebarToggleBtn" title="Toggle left panel">
+      <svg id="sidebarToggleIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform .2s;"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+    </button>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9 22 2Z"/></svg>
+    NRM Packet Sender
+  </div>
+  <div class="win-controls">
+    <span>&#8211;</span>
+    <span>&#9633;</span>
+    <span class="close">&#10005;</span>
+  </div>
+</div>
+
+<div class="app">
+  <!-- LEFT COLUMN -->
+  <div class="col-left">
+
+    <!-- Server Configuration -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="htitle">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+          Server Configuration
+        </div>
+        <span class="chev">&#9650;</span>
+      </div>
+      <div class="panel-body">
+
+        <div style="display:grid;grid-template-columns:1fr 1px 1fr;gap:24px;margin-bottom:18px;">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+              <span style="color:var(--blue);font-weight:700;font-size:14.5px;">Primary Server</span>
+            </div>
+            <div class="field-row" style="margin-bottom:0;">
+              <div>
+                <label class="field-label">Host / IP</label>
+                <div class="input-wrap">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                  <input id="hostInput" type="text" value="127.0.0.1">
+                </div>
+              </div>
+              <div>
+                <label class="field-label">Port</label>
+                <div class="input-wrap">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                  <input id="portInput" type="text" value="9999">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="background:var(--border-soft);"></div>
+
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span style="color:var(--red);font-weight:700;font-size:14.5px;">Emergency Server</span>
+            </div>
+            <div class="field-row" style="margin-bottom:0;">
+              <div>
+                <label class="field-label">Host / IP</label>
+                <div class="input-wrap">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                  <input id="emrHostInput" type="text" value="127.0.0.1">
+                </div>
+              </div>
+              <div>
+                <label class="field-label">Port</label>
+                <div class="input-wrap">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                  <input id="emrPortInput" type="text" value="9998">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--border-soft);margin:0 0 18px;">
+
+        <div class="field-row" style="margin-bottom:18px;">
+          <div>
+            <label class="field-label">Socket Timeout (sec)</label>
+            <div class="input-wrap number">
+              <input type="text" value="15">
+              <div class="spin-btns"><span>&#9650;</span><span>&#9660;</span></div>
+            </div>
+          </div>
+          <div>
+            <label class="field-label">Reconnect Delay (sec)</label>
+            <div class="input-wrap number">
+              <input type="text" value="5">
+              <div class="spin-btns"><span>&#9650;</span><span>&#9660;</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="status-row" style="display:none;">
+          <div class="status-line" id="connMsg">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+            Connected Successfully
+          </div>
+          <button class="btn blue-outline" id="testConnBtn" style="display:none;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 8.5a15 15 0 0 1 20 0"/><path d="M5 12a10 10 0 0 1 14 0"/><path d="M8.5 15.5a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/></svg>
+            Test Primary
+          </button>
+          <button class="btn blue-outline" id="testEmrConnBtn" style="display:none;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 8.5a15 15 0 0 1 20 0"/><path d="M5 12a10 10 0 0 1 14 0"/><path d="M8.5 15.5a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/></svg>
+            Test Emergency
+          </button>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--border-soft);margin:0 0 18px;">
+
+        <div class="send-settings-row">
+          <div class="duration-box">
+            <span style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;background:rgba(37,99,235,0.08);border-radius:8px;flex-shrink:0;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </span>
+            <div class="duration-input"><input id="intervalInput" type="text" value="10"></div>
+            <select class="unit-select" id="unitSelect">
+              <option>Seconds</option>
+              <option>Minutes</option>
+            </select>
+            <label class="checkbox-row">
+              <input type="checkbox" class="chk" id="autoIncCheck" checked>
+              Frame Increment<br>Auto Increment
+            </label>
+          </div>
+        </div>
+        <div class="send-settings-row" style="margin-bottom:18px;">
+          <label class="checkbox-row" style="align-self:flex-start;">
+            <input type="checkbox" class="chk" id="manualSpeedCheck">
+            Speed (Field 16)<br>Manual Override
+          </label>
+          <div class="duration-input" style="width:100px;">
+            <input id="speedInput" type="text" placeholder="000.0" maxlength="6" disabled>
+          </div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--border-soft);margin:0 0 18px;">
+
+        <div class="action-row">
+          <button class="btn start" id="startBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Start Sending
+          </button>
+          <button class="btn stop" id="stopBtn" disabled>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="1"/></svg>
+            Stop Sending
+          </button>
+          <button class="btn clear" id="clearLogBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Clear Log
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Connection Status (unified) -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="htitle">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          Connection Status
+        </div>
+        <span class="chev">&#9650;</span>
+      </div>
+      <div class="panel-body" style="display:flex;flex-direction:column;gap:16px;">
+        <div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+            <span style="color:var(--blue);font-weight:700;font-size:13.5px;">Primary Connection</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+            <div class="conn-status">
+              <span class="dot" id="statusDot"></span>
+              <span id="statusText" style="color:var(--green);">CONNECTED</span>
+              <span class="addr" id="statusAddr">127.0.0.1 : 9999</span>
+            </div>
+            <div class="conn-buttons">
+              <button class="btn connect" id="connectBtn">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                Connect
+              </button>
+              <button class="btn disconnect" id="disconnectBtn">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                Disconnect
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--border-soft);margin:0;">
+
+        <div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span style="color:var(--red);font-weight:700;font-size:13.5px;">Emergency Connection</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+            <div class="conn-status">
+              <span class="dot" id="emrStatusDot"></span>
+              <span id="emrStatusTextConn" style="color:var(--red);">DISCONNECTED</span>
+              <span class="addr" id="emrStatusAddr">127.0.0.1 : 9998</span>
+            </div>
+            <div class="conn-buttons">
+              <button class="btn connect" id="emrConnectBtn">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                Connect
+              </button>
+              <button class="btn disconnect" id="emrDisconnectBtn">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                Disconnect
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Parsed Packet Fields -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="htitle">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M3 15v4a2 2 0 0 0 2 2h4m10-6v4a2 2 0 0 1-2 2h-4"/></svg>
+          Parsed Packet Fields
+        </div>
+        <span class="chev">&#9650;</span>
+      </div>
+      <div class="panel-body">
+        <div id="parsedTypeRow" style="margin-bottom:4px;">
+          <div style="display:flex;align-items:center;gap:14px;">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" stroke-width="1.5" style="flex-shrink:0;opacity:.6;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><circle cx="11.5" cy="14.5" r="2.5"/><line x1="13.3" y1="16.3" x2="15" y2="18"/></svg>
+            <span class="parsed-empty">Paste a packet above to auto-detect its type and extract fields.</span>
+          </div>
+        </div>
+        <div class="parsed-grid" id="parsedFieldsGrid"></div>
+      </div>
+    </div>
+
+  </div>
+
+
+  <!-- RIGHT COLUMN -->
+  <div class="col-right">
+
+    <!-- Packet Input -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="htitle">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h5"/></svg>
+          Packet Input
+        </div>
+        <span class="chev">&#9650;</span>
+      </div>
+      <div class="panel-body">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="color:var(--text-dim);font-size:12.5px;">Paste NRM / ALT / LGN / HLM / EPB packet below</span>
+          <button class="btn" id="loadFileBtn" style="padding:6px 12px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Load From File
+          </button>
+        </div>
+        <textarea class="packet-input" id="packetInput" placeholder="Paste your packet here..."></textarea>
+        <div class="field-foot">
+          <span>Total Fields: <strong style="color:var(--text-main);" id="fieldCount">0</strong></span>
+          <span class="valid" id="validFormatBadge" style="display:none;">Valid Format <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="log-panel">
+      <div class="tabs-row">
+        <div class="tabs">
+          <div class="tab active" data-tab="live">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.2 8A10 10 0 1 1 18 4.6"/></svg>
+            Live Log
+          </div>
+          <div class="tab" data-tab="tx">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+            TX Log
+          </div>
+          <div class="tab" data-tab="rx">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v14M6 9l6 6 6-6"/></svg>
+            RX Log
+          </div>
+          <div class="tab" data-tab="all">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+            All Log
+          </div>
+          <div class="tab" data-tab="bulk">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            Bulk
+          </div>
+        </div>
+        <div class="clear-all-btn" id="clearAllBtn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          Clear All
+        </div>
+      </div>
+      <div class="log-table-wrap" id="logTableWrap">
+        <table class="log-table">
+          <thead>
+            <tr><th style="width:150px;">Time</th><th style="width:80px;">Type</th><th style="width:110px;">Direction</th><th>Message</th></tr>
+          </thead>
+          <tbody id="logBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Bulk IMEI panel (hidden unless Bulk tab active) -->
+      <div class="log-table-wrap" id="bulkPanelWrap" style="display:none;padding:16px;">
+        <div style="display:flex;gap:10px;margin-bottom:10px;">
+          <button class="btn" id="bulkLoadTxtBtn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Upload .txt</button>
+          <button class="btn" id="bulkLoadXlsxBtn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Upload .xlsx</button>
+          <input type="file" id="bulkTxtFileInput" accept=".txt" style="display:none;">
+          <input type="file" id="bulkXlsxFileInput" accept=".xlsx,.xls" style="display:none;">
+          <span style="align-self:center;color:var(--text-dim);font-size:12.5px;">Format: <code>IMEI,VehicleNumber</code> per line (Vehicle optional)</span>
+        </div>
+        <textarea id="bulkPasteArea" class="packet-input" style="min-height:110px;" placeholder="866710085466863,ML01WT1234&#10;860103061453172,GJ02XX5573&#10;866567069378561,XY45DX3423"></textarea>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 14px;">
+          <span style="color:var(--text-dim);font-size:12.5px;">Loaded IMEIs: <strong id="bulkCount" style="color:var(--text-main);">0</strong></span>
+          <button class="btn blue-outline" id="bulkParseBtn">Parse List</button>
+        </div>
+
+        <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+          <button class="btn start" id="bulkStartBtn" style="flex:1;justify-content:center;min-width:180px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Start Bulk (Primary, every 10s)
+          </button>
+          <button class="btn stop" id="bulkStopBtn" style="flex:1;justify-content:center;min-width:180px;" disabled>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="1"/></svg>
+            Stop Bulk
+          </button>
+        </div>
+        <div class="emergency-box" style="background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:10px 12px;">
+          <div class="emergency-status">
+            <span class="emergency-dot" id="bulkEmrDot"></span>
+            <span id="bulkEmrStatusText">Bulk Emergency Inactive</span>
+          </div>
+          <button class="btn emergency-on" id="bulkEmrToggleBtn" style="min-width:200px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span id="bulkEmrBtnText">Bulk Emergency ON</span>
+          </button>
+        </div>
+        <div style="margin-top:8px;color:var(--text-faint);font-size:12px;display:none;">
+          ON: har IMEI ke liye EMR packet Emergency server par har 5 sec bhejta hai. OFF: har IMEI ke liye SEM + Alert EO packet <strong>Primary aur Emergency dono</strong> server par bhejta hai.
+        </div>
+        <div id="bulkListPreview" style="margin-top:14px;"></div>
+      </div>
+    </div>
+
+    <div class="lastpkt-panel">
+      <div class="lastpkt-tabs">
+        <div class="lp-tabs-left">
+          <div class="lp-tab active" data-lp="tx">Last TX Packet</div>
+          <div class="lp-tab" data-lp="rx">Last RX Packet</div>
+        </div>
+        <div class="stat-pills">
+          <span class="stat-pill p-green">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+            Packets Sent : <span class="pv" id="statSent">24</span>
+          </span>
+          <span class="stat-pill p-blue">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><path d="M12 3v14M6 9l6 6 6-6"/></svg>
+            Packets Received : <span class="pv" id="statRecv">24</span>
+          </span>
+          <span class="stat-pill p-red">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Send Errors : <span class="pv" id="statErr">0</span>
+          </span>
+          <span class="stat-pill p-violet">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Last Sent <span class="pv" id="statLast">11:05:42</span>
+          </span>
+          <span class="stat-pill p-amber">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Uptime <span class="pv" id="statUptime">00:05:32</span>
+          </span>
+        </div>
+      </div>
+      <div class="lastpkt-body">
+        <div class="lastpkt-text" id="lastPacketText"></div>
+        <button class="btn copy-btn" id="copyBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+
+  <!-- THIRD COLUMN -->
+  <div class="col-third">
+
+    <!-- Packet Preview -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="htitle">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 4-8"/></svg>
+          Packet Preview (Auto Updated)
+        </div>
+        <span class="chev">&#9650;</span>
+      </div>
+      <div class="panel-body">
+        <div class="preview-grid" style="grid-template-columns:1fr;gap:10px;">
+          <div class="preview-row"><span class="k">Date</span><span class="v" id="pvDate">--</span></div>
+          <div class="preview-row"><span class="k">Time (UTC -05:30)</span><span class="v" id="pvTime">--</span></div>
+          <div class="preview-row"><span class="k">Frame No.</span><span class="v" id="pvFrame">------</span></div>
+          <div class="preview-row"><span class="k">Next Frame</span><span class="v" id="pvNext">------</span></div>
+        </div>
+        <button class="btn blue-outline update-btn" id="updateNowBtn" style="height:36px;width:100%;justify-content:center;margin-top:14px;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          Update Now
+        </button>
+      </div>
+    </div>
+
+    <!-- Login & Health (manual send) -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="htitle">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Login &amp; Health (Manual Send)
+        </div>
+        <span class="chev">&#9650;</span>
+      </div>
+      <div class="panel-body">
+        <div style="display:flex;gap:10px;">
+          <button class="btn blue-outline" id="sendLgnBtn" style="flex:1;justify-content:center;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+            Send Login ($LGN)
+          </button>
+          <button class="btn blue-outline" id="sendHlmBtn" style="flex:1;justify-content:center;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            Send Health ($HLM)
+          </button>
+        </div>
+        <div style="margin-top:8px;color:var(--text-faint);font-size:12px;display:none;">
+          Dono packets Primary server par jaate hain, current Packet Input (IMEI/Vehicle/FW/Lat-Long) se data uthate hue.
+        </div>
+      </div>
+    </div>
+
+    <!-- Emergency (EPB) -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="htitle">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Emergency (EPB)
+        </div>
+        <span class="chev">&#9650;</span>
+      </div>
+      <div class="panel-body">
+        <div class="emergency-box">
+          <div class="emergency-status">
+            <span class="emergency-dot" id="emrDot"></span>
+            <span id="emrStatusText">Emergency Inactive</span>
+          </div>
+          <button class="btn emergency-on" id="emrToggleBtn" style="min-width:180px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span id="emrBtnText">Emergency ON</span>
+          </button>
+        </div>
+        <div style="margin-top:10px;color:var(--text-faint);font-size:12px;display:none;">
+          ON click karte hi $EPB,EMR packet bhejta hai, phir har 5 sec mein dobara EMR bhejta rehta hai jab tak OFF na kiya jaye. OFF karne par ek $EPB,SEM packet bhejta hai.
+        </div>
+      </div>
+    </div>
+
+    <!-- Alert ID -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="htitle">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          Alert ID
+        </div>
+        <span class="chev">&#9650;</span>
+      </div>
+      <div class="panel-body">
+        <div class="alert-list" id="alertList"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="statusbar">
+  <div class="statusbar-left">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+    <span id="footerStatus">Ready</span>
+  </div>
+  <div class="statusbar-right">
+    <label><input type="checkbox" class="chk" id="autoScrollChk" checked>Auto Scroll</label>
+    <label><input type="checkbox" class="chk" id="soundChk" checked>Sound</label>
+    <span>Theme
+      <select><option>Dark</option><option selected>Light</option></select>
+    </span>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+(function(){
+  // ---------- State ----------
+  // `connected`, all logs, and all stats are now the SOURCE OF TRUTH from the
+  // Python bridge server (server.py), which holds the real TCP socket.
+  // This page just polls it and renders what it reports.
+  let connected = false;
+  let emrConnected = false;
+  let sending = false;
+  let sendTimer = null;
+  let currentTab = 'live';
+  let currentLp = 'tx';
+  let logs = []; // {id, time, type, direction, message} - filled from /api/state polls
+  let lastLogId = 0;
+  let serverHost = '', serverPort = '';
+  let emrServerHost = '', emrServerPort = '';
+
+  // Template parsed from the pasted packet in the textarea
+  let template = null;      // { fields, dateIdx, timeIdx, frameIdx, frameLen }
+  let currentFrame = 22431; // fallback until a packet is parsed
+
+  const el = id => document.getElementById(id);
+
+  // ---------- Helpers ----------
+  function pad(n, len=2){ return String(n).padStart(len,'0'); }
+
+  function nowStamp(){
+    const d = new Date();
+    return `${pad(d.getDate())}-${pad(d.getMonth()+1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+  function nowTimeShort(){
+    const d = new Date();
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
+  // Plain current date (NO offset applied)
+  function getLocalDate(){
+    const d = new Date();
+    return {
+      dateStr: `${pad(d.getDate())}${pad(d.getMonth()+1)}${d.getFullYear()}`,
+      d
+    };
+  }
+
+  // Current LOCAL time minus 5 hours 30 minutes (simple subtraction from the
+  // clock time you actually see, e.g. 19:45:28 -> 14:15:28)
+  function getAdjustedUTC(){
+    const OFFSET_MS = (5*60+30)*60000;
+    const t = new Date(Date.now() - OFFSET_MS);
+    return {
+      timeStr: `${pad(t.getHours())}${pad(t.getMinutes())}${pad(t.getSeconds())}`,
+      d: t
+    };
+  }
+
+  // Parse the pasted packet into a field template, locating date, time,
+  // frame and checksum fields. Handles BOTH observed packet endings:
+  //   ...,FRAME,1,-,*        (checksum field separated from * by a comma)
+  //   ...,FRAME,...,CHKSUM*  (checksum digits attached directly to *, no comma)
+  function parseTemplate(raw){
+    const trimmed = (raw||'').trim().replace(/\s+/g, '');
+    if(!trimmed) return null;
+
+    const hasStar = trimmed.includes('*');
+    let withoutStar = hasStar ? trimmed.substring(0, trimmed.indexOf('*')) : trimmed;
+    // Was there a comma right before the "*"? (i.e. checksum field, then comma, then *)
+    const starAttached = hasStar && !withoutStar.endsWith(',');
+    if(withoutStar.endsWith(',')) withoutStar = withoutStar.slice(0, -1);
+
+    const fields = withoutStar.split(',');
+    if(fields.length < 5) return null;
+
+    // find "DDMMYYYY" followed by "HHMMSS"
+    let dateIdx = -1;
+    for(let i=0;i<fields.length-1;i++){
+      if(/^\d{8}$/.test(fields[i]) && /^\d{6}$/.test(fields[i+1])){
+        dateIdx = i;
+        break;
+      }
+    }
+    const timeIdx = dateIdx >= 0 ? dateIdx+1 : -1;
+
+    // Frame number: a pure 6-digit numeric field, excluding the time field
+    // (which also happens to be 6 digits). This works regardless of WHERE
+    // in the packet the frame field sits, unlike a fixed offset from the end.
+    let frameIdx = -1;
+    for(let i=fields.length-1;i>=0;i--){
+      if(i === timeIdx) continue;
+      if(/^\d{6}$/.test(fields[i])){ frameIdx = i; break; }
+    }
+    // Fallback: any purely-numeric field of 4+ digits, excluding date/time
+    if(frameIdx < 0){
+      for(let i=fields.length-1;i>=0;i--){
+        if(i === dateIdx || i === timeIdx) continue;
+        if(/^\d{4,}$/.test(fields[i])){ frameIdx = i; break; }
+      }
+    }
+
+    // The last field (right before "*") is always the checksum placeholder,
+    // regardless of format — it gets overwritten fresh on every send.
+    const checksumIdx = fields.length - 1;
+
+    return { fields, dateIdx, timeIdx, frameIdx, checksumIdx, starAttached,
+      frameLen: frameIdx>=0 ? fields[frameIdx].length : 6 };
+  }
+
+  // ---------- CRC32 checksum (auto-changes every packet) ----------
+  function crc32(str){
+    let crc = 0xFFFFFFFF;
+    for(let i=0;i<str.length;i++){
+      crc ^= str.charCodeAt(i);
+      for(let j=0;j<8;j++){
+        crc = (crc >>> 1) ^ (0xEDB88320 & -(crc & 1));
+      }
+    }
+    crc = (crc ^ 0xFFFFFFFF) >>> 0;
+    return crc.toString(16).toUpperCase().padStart(8,'0');
+  }
+
+  // Format a manually entered speed value as "000.0" (3-digit zero-padded int, 1 decimal)
+  function formatSpeed(val){
+    const num = parseFloat(val);
+    if(isNaN(num)) return null;
+    const fixed = Math.abs(num).toFixed(1);
+    const [intPart, decPart] = fixed.split('.');
+    const sign = num < 0 ? '-' : '';
+    return sign + intPart.padStart(3,'0') + '.' + decPart;
+  }
+  const SPEED_FIELD_IDX = 15; // Field 16 (0-indexed) — speed value (idx16 is course/heading, 0-360)
+
+  // Build a TX packet from the parsed template, with fresh date/time/frame
+  // and a freshly computed CRC32 checksum (changes with every packet),
+  // reproducing the exact same "*" formatting style as the pasted sample.
+  function buildPacketFromTemplate(tpl, frameNo){
+    const fields = tpl.fields.slice();
+    const { dateStr } = getLocalDate();
+    const { timeStr } = getAdjustedUTC();
+    if(tpl.dateIdx >= 0) fields[tpl.dateIdx] = dateStr;
+    if(tpl.timeIdx >= 0) fields[tpl.timeIdx] = timeStr;
+    if(tpl.frameIdx >= 0) fields[tpl.frameIdx] = pad(frameNo, tpl.frameLen);
+
+    // Manual speed override for Field 16, if enabled
+    if(el('manualSpeedCheck').checked && fields.length > SPEED_FIELD_IDX){
+      const formatted = formatSpeed(el('speedInput').value);
+      if(formatted !== null) fields[SPEED_FIELD_IDX] = formatted;
+    }
+
+    // Checksum = crc32 of every field EXCEPT the checksum field itself
+    const dataForChecksum = fields.slice(0, tpl.checksumIdx).join(',') + ',';
+    const checksum = crc32(dataForChecksum);
+    fields[tpl.checksumIdx] = checksum;
+
+    const joined = fields.join(',');
+    return tpl.starAttached ? joined + '*' : joined + ',*';
+  }
+
+  // ==========================================================================
+  // MULTI PACKET-TYPE SUPPORT: $LGN (Login), $HLM (Health), $NRM/$ALT (already
+  // handled above for sending), $EPB (Emergency). Auto-detects the pasted
+  // packet's type and extracts the fields the user asked for.
+  // ==========================================================================
+
+  function cleanField(f){ return (f===undefined || f===null) ? '' : f.replace(/\*.*$/,''); }
+
+  function parseAnyPacket(raw){
+    const trimmed = (raw||'').trim().replace(/\s+/g,'');
+    if(!trimmed) return null;
+    const fields = trimmed.split(',');
+    const header = fields[0];
+
+    if(header === '$LGN'){
+      return { label:'Login Packet ($LGN)', data:{
+        'Vehicle Number': fields[1],
+        'IMEI': fields[2],
+        'Firmware Version': fields[3],
+        'Latitude': [fields[5], fields[6]].filter(Boolean).join(' '),
+        'Longitude': [fields[7], cleanField(fields[8])].filter(Boolean).join(' ')
+      }};
+    }
+    if(header === '$HLM'){
+      return { label:'Health Monitoring Packet ($HLM)', data:{
+        'Vendor ID': fields[1],
+        'Firmware Version': fields[2],
+        'IMEI': fields[3],
+        'Digital Input Status': fields[9],
+        'Digital Output Status': fields[10]
+      }};
+    }
+    if(header === '$NRM' || header === '$ALT'){
+      return { label: (header==='$NRM' ? 'Location/Periodic Packet ($NRM)' : 'Alert Packet ($ALT)'), data:{
+        'Vendor ID': fields[1],
+        'Firmware Version': fields[2],
+        'Packet Type': fields[3],
+        'Alert ID': fields[4],
+        'IMEI': fields[6],
+        'Vehicle Number': fields[7],
+        'GPS Fix': fields[8],
+        'Latitude': [fields[11], fields[12]].filter(Boolean).join(' '),
+        'Longitude': [fields[13], fields[14]].filter(Boolean).join(' '),
+        'Speed': fields[15],
+        'Ignition': fields[22],
+        'Frame Number': fields[49]
+      }};
+    }
+    if(header === '$EPB'){
+      return { label: `Emergency Packet ($EPB, ${fields[1]||''})`, data:{
+        'IMEI': fields[2],
+        'GPS Fix': fields[5],
+        'Latitude': [fields[6], fields[7]].filter(Boolean).join(' '),
+        'Longitude': [fields[8], fields[9]].filter(Boolean).join(' '),
+        'Vehicle Number': fields[14]
+      }};
+    }
+    return null;
+  }
+
+  function renderParsedFields(raw){
+    const parsed = parseAnyPacket(raw);
+    const typeRow = el('parsedTypeRow');
+    const grid = el('parsedFieldsGrid');
+    if(!parsed){
+      typeRow.innerHTML = '<div style="display:flex;align-items:center;gap:14px;"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" stroke-width="1.5" style="flex-shrink:0;opacity:.6;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><circle cx="11.5" cy="14.5" r="2.5"/><line x1="13.3" y1="16.3" x2="15" y2="18"/></svg><span class="parsed-empty">Paste a packet above to auto-detect its type and extract fields.</span></div>';
+      grid.innerHTML = '';
+      return;
+    }
+    typeRow.innerHTML = `<span class="ptype-badge">${parsed.label}</span>`;
+    grid.innerHTML = Object.entries(parsed.data)
+      .map(([k,v]) => `<div class="parsed-row"><span class="k">${k}</span><span class="v">${(v===undefined||v==='') ? '-' : v}</span></div>`)
+      .join('');
+  }
+
+  // ---------- Alert ID: $NRM / $ALT based quick-send alerts ----------
+  // All 16 alerts share the same 57-field structure as a normal $NRM/$ALT
+  // packet; only a handful of fields differ per alert (per the spec given).
+  const ALT_BASE_RAW = "$ALT,WTEX,1.0NTC,BD,03,L,866567069378561,XY45DX3423,1,12072026,104316,028.360025,N,076.927968,E,0.3,069.13,20,0279.32,19.00,1.06,airtel,1,0,000.0,004.0,0,C,22,404,34,0d5d,87c1,857d,0d5d,15,87c0,0d5d,14,87cb,0d5d,11,87ca,0d5d,10,0011,00,0.000,0.000,041612,110.280,-,1.0,0,0,2G_1_52_W_1_1_1_69,DD4C7D77*";
+  function getBaseAlertFields(){
+    return ALT_BASE_RAW.slice(0, ALT_BASE_RAW.indexOf('*')).split(',');
+  }
+
+  const ALERT_DEFS = [
+    { id:'01', code:null, base:'NRM', status:'L', label:'Location Update' },
+    { id:'02', code:null, base:'NRM', status:'H', operator:'Pri', label:'Location Update (History)' },
+    { id:'03', code:'BD', base:'ALT', label:'Mains Off', mainsStatus:'0', mainsVoltage:'000.0' },
+    { id:'04', code:'BL', base:'ALT', label:'Low Battery', battery:'003.8' },
+    { id:'05', code:'BH', base:'ALT', label:'Low Battery Removed', battery:'003.8' },
+    { id:'06', code:'BR', base:'ALT', label:'Mains On', mainsStatus:'1', mainsVoltage:'013.6' },
+    { id:'07', code:'IN', base:'ALT', label:'Ignition On', ignition:'1' },
+    { id:'08', code:'IF', base:'ALT', label:'Ignition Off', ignition:'0' },
+    { id:'09', code:'TA', base:'ALT', label:'Tamper Alert', tamper:'C' },
+    { id:'10', code:'EA', base:'ALT', label:'Emergency On', emergency:'1' },
+    { id:'11', code:'EO', base:'ALT', label:'Emergency Off', emergency:'0' },
+    { id:'12', code:'OA', base:'ALT', label:'OTA Alert' },
+    { id:'13', code:'HB', base:'ALT', label:'Harsh Breaking' },
+    { id:'14', code:'HA', base:'ALT', label:'Harsh Acceleration' },
+    { id:'15', code:'RT', base:'ALT', label:'Rash Turning' },
+    { id:'16', code:'WD', base:'ALT', label:'Wire Disconnect', status:'H', operator:'Pri' },
+  ];
+
+  function buildAlertPacket(def){
+    const fields = getBaseAlertFields();
+
+    fields[0] = def.base === 'NRM' ? '$NRM' : '$ALT';
+    fields[3] = def.base === 'NRM' ? 'NR' : def.code;
+    fields[4] = def.id;
+    fields[5] = def.status || 'L';
+
+    // Pull vendor/firmware/IMEI/vehicle/lat/long from the currently loaded main
+    // packet (Packet Input), if one has been parsed — else keep base defaults.
+    if(template){
+      const pick = (idx) => template.fields[idx];
+      if(pick(1)) fields[1] = pick(1);   // Vendor ID
+      if(pick(2)) fields[2] = pick(2);   // Firmware version
+      if(pick(6)) fields[6] = pick(6);   // IMEI
+      if(pick(7)) fields[7] = pick(7);   // Vehicle Number
+      if(pick(11)) fields[11] = pick(11); // Lat
+      if(pick(12)) fields[12] = pick(12);
+      if(pick(13)) fields[13] = pick(13); // Lon
+      if(pick(14)) fields[14] = pick(14);
+    }
+
+    fields[8] = '1'; // GPS fix always 1
+    const { dateStr } = getLocalDate();
+    const { timeStr } = getAdjustedUTC();
+    fields[9] = dateStr;
+    fields[10] = timeStr;
+    fields[22] = def.ignition !== undefined ? def.ignition : '1'; // ignition ka value 1 rahega (default)
+    fields[49] = pad(currentFrame, 6);
+    currentFrame++;
+    updatePreview(currentFrame);
+
+    if(def.operator) fields[21] = def.operator;
+    if(def.mainsStatus !== undefined) fields[23] = def.mainsStatus;
+    if(def.mainsVoltage !== undefined) fields[24] = def.mainsVoltage;
+    if(def.battery !== undefined) fields[25] = def.battery;
+    if(def.emergency !== undefined) fields[26] = def.emergency;
+    if(def.tamper !== undefined) fields[27] = def.tamper;
+
+    const dataForChecksum = fields.slice(0, fields.length-1).join(',') + ',';
+    fields[fields.length-1] = crc32(dataForChecksum);
+    return fields.join(',') + '*';
+  }
+
+  function renderAlertList(){
+    const list = el('alertList');
+    list.innerHTML = ALERT_DEFS.map(def => `
+      <div class="alert-item">
+        <div class="ainfo">
+          <span class="aid">ID ${def.id}${def.code ? ' · '+def.code : ''}</span>
+          <span class="alabel">${def.label}</span>
+        </div>
+        <button class="alert-send-btn" data-alert-id="${def.id}">Send</button>
+      </div>
+    `).join('');
+    list.querySelectorAll('.alert-send-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const def = ALERT_DEFS.find(d => d.id === btn.dataset.alertId);
+        const packet = buildAlertPacket(def);
+        const ok = await sendRawPacket(packet, 'primary');
+        btn.textContent = ok ? 'Sent ✓' : 'Failed';
+        btn.classList.toggle('sent', !!ok);
+        setTimeout(() => { btn.textContent = 'Send'; btn.classList.remove('sent'); }, 1200);
+      });
+    });
+  }
+
+  // ---------- Login ($LGN) and Health ($HLM) packet builders ----------
+  // Both are sent over the PRIMARY connection. $LGN carries no checksum field
+  // (per the sample format); $HLM likewise is sent as-is.
+  function buildLGNPacket(){
+    const veh  = (template && template.fields[7])  ? template.fields[7]  : 'XY45DX3423';
+    const imei = (template && template.fields[6])  ? template.fields[6]  : '866567069378561';
+    const fw   = (template && template.fields[2])  ? template.fields[2]  : '1.0NTC';
+    const lat  = (template && template.fields[11]) ? template.fields[11] : '028.359915';
+    const latH = (template && template.fields[12]) ? template.fields[12] : 'N';
+    const lon  = (template && template.fields[13]) ? template.fields[13] : '076.927717';
+    const lonH = (template && template.fields[14]) ? template.fields[14] : 'E';
+    return `$LGN,${veh},${imei},${fw},AIS140,${lat},${latH},${lon},${lonH}*`;
+  }
+
+  function buildHLMPacket(){
+    const vendor = (template && template.fields[1]) ? template.fields[1] : 'WTEX';
+    const fw     = (template && template.fields[2]) ? template.fields[2] : '1.0NTC';
+    const imei   = (template && template.fields[6]) ? template.fields[6] : '866567069378561';
+    return `$HLM,${vendor},${fw},${imei},97,20,96,10,60,0000,00,00.000,00.000*`;
+  }
+
+  el('sendLgnBtn').addEventListener('click', async () => {
+    const ok = await sendRawPacket(buildLGNPacket(), 'primary');
+    el('footerStatus').textContent = ok ? 'Login ($LGN) packet sent' : 'Login packet send failed';
+  });
+  el('sendHlmBtn').addEventListener('click', async () => {
+    const ok = await sendRawPacket(buildHLMPacket(), 'primary');
+    el('footerStatus').textContent = ok ? 'Health ($HLM) packet sent' : 'Health packet send failed';
+  });
+
+  // ---------- Emergency ($EPB EMR / SEM) — sent over the EMERGENCY connection ----------
+  let emergencyActive = false;
+  let emergencyTimer = null;
+
+  function buildEPBPacket(type){
+    const imei   = (template && template.fields[6])  ? template.fields[6]  : '866567069378561';
+    const veh    = (template && template.fields[7])  ? template.fields[7]  : 'XY45DX3423';
+    const lat    = (template && template.fields[11]) ? template.fields[11] : '028.360010';
+    const latH   = (template && template.fields[12]) ? template.fields[12] : 'N';
+    const lon    = (template && template.fields[13]) ? template.fields[13] : '076.927725';
+    const lonH   = (template && template.fields[14]) ? template.fields[14] : 'E';
+    const speed  = (template && template.fields[15]) ? template.fields[15] : '00.00';
+
+    // Date = plain current date, Time = current time minus 05:30 (same rule as NRM/ALT)
+    const { dateStr } = getLocalDate();
+    const { timeStr } = getAdjustedUTC();
+    const dateTimeStr = `${dateStr}${timeStr}`;
+
+    const fields = ['$EPB', type, imei, 'NM', dateTimeStr, 'A', lat, latH, lon, lonH, '0000000000.0', speed, '00109.177', 'G', veh, '0000'];
+    const body = fields.join(',') + '*';
+    // "checksum $ se lekar * tak calculate hoga" — CRC32 over the full body INCLUDING "$" and the trailing "*"
+    const checksum = crc32(body);
+    return body + checksum;
+  }
+
+  async function emergencyOn(){
+    emergencyActive = true;
+    el('emrToggleBtn').classList.add('active');
+    el('emrBtnText').textContent = 'Emergency OFF';
+    el('emrDot').classList.add('active');
+    el('emrStatusText').textContent = 'Emergency ACTIVE — sending EMR every 5s';
+    await sendRawPacket(buildEPBPacket('EMR'), 'emergency');
+    // Per spec: EMR going out must auto-trigger Alert ID 10 (Emergency On, EA) on PRIMARY
+    const alert10 = ALERT_DEFS.find(d => d.id === '10');
+    if(alert10) await sendRawPacket(buildAlertPacket(alert10), 'primary');
+    emergencyTimer = setInterval(() => {
+      sendRawPacket(buildEPBPacket('EMR'), 'emergency');
+    }, 5000);
+  }
+
+  async function emergencyOff(){
+    emergencyActive = false;
+    if(emergencyTimer){ clearInterval(emergencyTimer); emergencyTimer = null; }
+    el('emrToggleBtn').classList.remove('active');
+    el('emrBtnText').textContent = 'Emergency ON';
+    el('emrDot').classList.remove('active');
+    el('emrStatusText').textContent = 'Emergency Inactive';
+    await sendRawPacket(buildEPBPacket('SEM'), 'emergency');
+    // Per spec: SEM going out must auto-trigger Alert ID 11 (Emergency Off, EO) on PRIMARY
+    const alert11 = ALERT_DEFS.find(d => d.id === '11');
+    if(alert11) await sendRawPacket(buildAlertPacket(alert11), 'primary');
+  }
+
+  // ==========================================================================
+  // BULK IMEI SENDING — paste or upload (.txt / .xlsx) a list of IMEIs
+  // (optionally with vehicle number), then:
+  //   - "Start Bulk" streams an $NRM packet per IMEI to PRIMARY every 10s
+  //   - "Bulk Emergency ON" streams an EMR packet per IMEI to EMERGENCY every 5s
+  //   - "Bulk Emergency OFF" sends SEM + Alert EO per IMEI to BOTH servers
+  // ==========================================================================
+  let bulkList = [];          // [{imei, vehicle}]
+  let bulkFrame = 1;
+  let bulkSending = false;
+  let bulkSendTimer = null;
+  let bulkEmergencyActive = false;
+  let bulkEmergencyTimer = null;
+
+  function parseBulkText(text){
+    return (text || '').split('\n')
+      .map(l => l.trim())
+      .filter(Boolean)
+      .map(line => {
+        const parts = line.split(',').map(p => p.trim());
+        return { imei: parts[0], vehicle: parts[1] || '' };
+      })
+      .filter(e => e.imei);
+  }
+
+  function renderBulkList(){
+    el('bulkCount').textContent = bulkList.length;
+    const wrap = el('bulkListPreview');
+    if(bulkList.length === 0){
+      wrap.innerHTML = '';
+      return;
+    }
+    wrap.innerHTML = '<div class="alert-list" style="max-height:240px;">' + bulkList.map((e,i) => `
+      <div class="alert-item">
+        <div class="ainfo">
+          <span class="aid">#${i+1}</span>
+          <span class="alabel">${e.imei}${e.vehicle ? ' · '+e.vehicle : ''}</span>
+        </div>
+      </div>
+    `).join('') + '</div>';
+  }
+
+  // Build a periodic $NRM packet for ONE bulk entry
+  function buildBulkNRMPacket(entry, frameNo){
+    const fields = getBaseAlertFields();
+    fields[0] = '$NRM'; fields[3] = 'NR'; fields[4] = '01'; fields[5] = 'L';
+    if(template){
+      const pick = idx => template.fields[idx];
+      if(pick(1)) fields[1] = pick(1);
+      if(pick(2)) fields[2] = pick(2);
+      if(pick(11)) fields[11] = pick(11);
+      if(pick(12)) fields[12] = pick(12);
+      if(pick(13)) fields[13] = pick(13);
+      if(pick(14)) fields[14] = pick(14);
+    }
+    fields[6] = entry.imei;
+    if(entry.vehicle) fields[7] = entry.vehicle;
+    fields[8] = '1';
+    const { dateStr } = getLocalDate();
+    const { timeStr } = getAdjustedUTC();
+    fields[9] = dateStr; fields[10] = timeStr;
+    fields[22] = '1';
+    fields[49] = pad(frameNo, 6);
+    const dataForChecksum = fields.slice(0, fields.length-1).join(',') + ',';
+    fields[fields.length-1] = crc32(dataForChecksum);
+    return fields.join(',') + '*';
+  }
+
+  // Build an $ALT-style alert packet (e.g. Alert 11 / EO) for ONE bulk entry
+  function buildBulkAlertPacket(def, entry, frameNo){
+    const fields = getBaseAlertFields();
+    fields[0] = def.base === 'NRM' ? '$NRM' : '$ALT';
+    fields[3] = def.base === 'NRM' ? 'NR' : def.code;
+    fields[4] = def.id;
+    fields[5] = def.status || 'L';
+    if(template){
+      const pick = idx => template.fields[idx];
+      if(pick(1)) fields[1] = pick(1);
+      if(pick(2)) fields[2] = pick(2);
+      if(pick(11)) fields[11] = pick(11);
+      if(pick(12)) fields[12] = pick(12);
+      if(pick(13)) fields[13] = pick(13);
+      if(pick(14)) fields[14] = pick(14);
+    }
+    fields[6] = entry.imei;
+    if(entry.vehicle) fields[7] = entry.vehicle;
+    fields[8] = '1';
+    const { dateStr } = getLocalDate();
+    const { timeStr } = getAdjustedUTC();
+    fields[9] = dateStr; fields[10] = timeStr;
+    fields[22] = def.ignition !== undefined ? def.ignition : '1';
+    fields[49] = pad(frameNo, 6);
+    if(def.operator) fields[21] = def.operator;
+    if(def.mainsStatus !== undefined) fields[23] = def.mainsStatus;
+    if(def.mainsVoltage !== undefined) fields[24] = def.mainsVoltage;
+    if(def.battery !== undefined) fields[25] = def.battery;
+    if(def.emergency !== undefined) fields[26] = def.emergency;
+    if(def.tamper !== undefined) fields[27] = def.tamper;
+    const dataForChecksum = fields.slice(0, fields.length-1).join(',') + ',';
+    fields[fields.length-1] = crc32(dataForChecksum);
+    return fields.join(',') + '*';
+  }
+
+  // Build an $EPB (EMR/SEM) packet for ONE bulk entry
+  function buildBulkEPBPacket(type, entry){
+    const lat   = (template && template.fields[11]) ? template.fields[11] : '028.360010';
+    const latH  = (template && template.fields[12]) ? template.fields[12] : 'N';
+    const lon   = (template && template.fields[13]) ? template.fields[13] : '076.927725';
+    const lonH  = (template && template.fields[14]) ? template.fields[14] : 'E';
+    const speed = (template && template.fields[15]) ? template.fields[15] : '00.00';
+    const { dateStr } = getLocalDate();
+    const { timeStr } = getAdjustedUTC();
+    const dateTimeStr = `${dateStr}${timeStr}`;
+    const fields = ['$EPB', type, entry.imei, 'NM', dateTimeStr, 'A', lat, latH, lon, lonH, '0000000000.0', speed, '00109.177', 'G', entry.vehicle || '', '0000'];
+    const body = fields.join(',') + '*';
+    return body + crc32(body);
+  }
+
+  function bulkSendCycle(){
+    bulkList.forEach(entry => {
+      const packet = buildBulkNRMPacket(entry, bulkFrame);
+      bulkFrame++;
+      sendRawPacket(packet, 'primary');
+    });
+  }
+
+  function startBulkSending(){
+    if(bulkList.length === 0){
+      el('footerStatus').textContent = 'Bulk list khaali hai — pehle IMEI paste/upload karein.';
+      return;
+    }
+    bulkSending = true;
+    el('bulkStartBtn').disabled = true;
+    el('bulkStopBtn').disabled = false;
+    bulkSendCycle();
+    bulkSendTimer = setInterval(bulkSendCycle, 10000);
+  }
+
+  function stopBulkSending(){
+    bulkSending = false;
+    el('bulkStartBtn').disabled = false;
+    el('bulkStopBtn').disabled = true;
+    if(bulkSendTimer){ clearInterval(bulkSendTimer); bulkSendTimer = null; }
+  }
+
+  async function bulkEmergencyOn(){
+    if(bulkList.length === 0){
+      el('footerStatus').textContent = 'Bulk list khaali hai — pehle IMEI paste/upload karein.';
+      return;
+    }
+    bulkEmergencyActive = true;
+    el('bulkEmrToggleBtn').classList.add('active');
+    el('bulkEmrBtnText').textContent = 'Bulk Emergency OFF';
+    el('bulkEmrDot').classList.add('active');
+    el('bulkEmrStatusText').textContent = 'Bulk Emergency ACTIVE — EMR every 5s';
+    bulkList.forEach(entry => sendRawPacket(buildBulkEPBPacket('EMR', entry), 'emergency'));
+    bulkEmergencyTimer = setInterval(() => {
+      bulkList.forEach(entry => sendRawPacket(buildBulkEPBPacket('EMR', entry), 'emergency'));
+    }, 5000);
+  }
+
+  async function bulkEmergencyOff(){
+    bulkEmergencyActive = false;
+    if(bulkEmergencyTimer){ clearInterval(bulkEmergencyTimer); bulkEmergencyTimer = null; }
+    el('bulkEmrToggleBtn').classList.remove('active');
+    el('bulkEmrBtnText').textContent = 'Bulk Emergency ON';
+    el('bulkEmrDot').classList.remove('active');
+    el('bulkEmrStatusText').textContent = 'Bulk Emergency Inactive';
+    const alert11 = ALERT_DEFS.find(d => d.id === '11');
+    for(const entry of bulkList){
+      const semPacket = buildBulkEPBPacket('SEM', entry);
+      await sendRawPacket(semPacket, 'primary');
+      await sendRawPacket(semPacket, 'emergency');
+      if(alert11){
+        const eoPacket = buildBulkAlertPacket(alert11, entry, bulkFrame);
+        bulkFrame++;
+        await sendRawPacket(eoPacket, 'primary');
+        await sendRawPacket(eoPacket, 'emergency');
+      }
+    }
+  }
+
+  el('bulkParseBtn').addEventListener('click', () => {
+    bulkList = parseBulkText(el('bulkPasteArea').value);
+    renderBulkList();
+  });
+
+  el('bulkLoadTxtBtn').addEventListener('click', () => el('bulkTxtFileInput').click());
+  el('bulkTxtFileInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      el('bulkPasteArea').value = ev.target.result;
+      bulkList = parseBulkText(ev.target.result);
+      renderBulkList();
+    };
+    reader.readAsText(file);
+  });
+
+  el('bulkLoadXlsxBtn').addEventListener('click', () => el('bulkXlsxFileInput').click());
+  el('bulkXlsxFileInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try{
+        const data = new Uint8Array(ev.target.result);
+        const wb = XLSX.read(data, {type:'array'});
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, {header:1});
+        bulkList = rows
+          .map(r => ({ imei: String(r[0]||'').trim(), vehicle: String(r[1]||'').trim() }))
+          .filter(e => e.imei && e.imei.toLowerCase() !== 'imei');
+        el('bulkPasteArea').value = bulkList.map(e => e.vehicle ? `${e.imei},${e.vehicle}` : e.imei).join('\n');
+        renderBulkList();
+      }catch(err){
+        el('footerStatus').textContent = 'XLSX parse error: ' + err.message;
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
+  el('bulkStartBtn').addEventListener('click', startBulkSending);
+  el('bulkStopBtn').addEventListener('click', stopBulkSending);
+  el('bulkEmrToggleBtn').addEventListener('click', () => {
+    if(bulkEmergencyActive) bulkEmergencyOff(); else bulkEmergencyOn();
+  });
+  renderBulkList();
+
+
+  // Local-only log entry (used only when the bridge server itself can't be reached at all)
+  function addLocalLog(type, direction, message){
+    const entry = { id: -Date.now()-Math.random(), time: nowStamp(), type, direction, message };
+    logs.push(entry);
+    if(logs.length > 500) logs.shift();
+    renderLogs();
+  }
+
+  function badgeHtml(type, direction){
+    const typeClassMap = {INFO:'info', TX:'tx', RX:'rx'};
+    const dirClassMap = {SYSTEM:'system', SEND:'send', RECEIVE:'receive'};
+    const tCls = typeClassMap[type] || 'info';
+    const dCls = dirClassMap[direction] || 'system';
+    return `<span class="badge ${tCls}">${type}</span>`;
+  }
+  function dirBadgeHtml(direction){
+    const dirClassMap = {SYSTEM:'system', SEND:'send', RECEIVE:'receive'};
+    const dCls = dirClassMap[direction] || 'system';
+    return `<span class="badge ${dCls}">${direction}</span>`;
+  }
+
+  function renderLogs(){
+    let filtered = logs;
+    if(currentTab === 'tx') filtered = logs.filter(l => l.type === 'TX');
+    else if(currentTab === 'rx') filtered = logs.filter(l => l.type === 'RX');
+    // 'live' and 'all' show everything (live = most recent behavior same visual)
+
+    const body = el('logBody');
+    const rowsHtml = filtered.slice(-200).map(l => {
+      let msgClass = 'msg-info';
+      if(l.type === 'TX') msgClass = 'msg-tx';
+      else if(l.type === 'RX') msgClass = 'msg-rx';
+      return `<tr>
+        <td class="time-col">${l.time}</td>
+        <td>${badgeHtml(l.type)}</td>
+        <td>${dirBadgeHtml(l.direction)}</td>
+        <td class="msg-col ${msgClass}" title="${l.message.replace(/"/g,'&quot;')}">${l.message}</td>
+      </tr>`;
+    }).join('');
+    body.innerHTML = rowsHtml || `<tr><td colspan="4" style="text-align:center;color:var(--text-faint);padding:60px 20px;">
+      <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.5;margin-bottom:14px;"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+      <div style="font-size:14.5px;color:var(--text-dim);font-weight:600;margin-bottom:4px;">No log entries yet</div>
+      <div style="font-size:12.5px;">Send or receive packets to view logs here.</div>
+    </td></tr>`;
+
+    if(el('autoScrollChk').checked){
+      const wrap = el('logTableWrap');
+      wrap.scrollTop = wrap.scrollHeight;
+    }
+  }
+
+  function updateStatusUI(){
+    el('statusDot').classList.toggle('off', !connected);
+    el('statusText').textContent = connected ? 'CONNECTED' : 'DISCONNECTED';
+    el('statusText').style.color = connected ? 'var(--green)' : 'var(--red)';
+    el('statusAddr').textContent = connected
+      ? `${serverHost} : ${serverPort}`
+      : `${el('hostInput').value} : ${el('portInput').value}`;
+    el('connectBtn').disabled = connected;
+    el('disconnectBtn').disabled = !connected;
+    el('startBtn').disabled = !connected || sending;
+    el('stopBtn').disabled = !sending;
+
+    el('emrStatusDot').classList.toggle('off', !emrConnected);
+    el('emrStatusTextConn').textContent = emrConnected ? 'CONNECTED' : 'DISCONNECTED';
+    el('emrStatusTextConn').style.color = emrConnected ? 'var(--green)' : 'var(--red)';
+    el('emrStatusAddr').textContent = emrConnected
+      ? `${emrServerHost} : ${emrServerPort}`
+      : `${el('emrHostInput').value} : ${el('emrPortInput').value}`;
+    el('emrConnectBtn').disabled = emrConnected;
+    el('emrDisconnectBtn').disabled = !emrConnected;
+  }
+
+  function formatUptime(sec){
+    const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  }
+
+  function updatePreview(frameNo){
+    const localDate = new Date();
+    const { d } = getAdjustedUTC();
+    const dateStr = `${pad(localDate.getDate())}-${pad(localDate.getMonth()+1)}-${localDate.getFullYear()}`;
+    const timeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    el('pvDate').textContent = dateStr;
+    el('pvTime').textContent = timeStr;
+    if(!template){
+      el('pvFrame').textContent = '------';
+      el('pvNext').textContent = '------';
+      return;
+    }
+    const len = template.frameLen || 6;
+    el('pvFrame').textContent = pad(frameNo,len);
+    el('pvNext').textContent = pad(frameNo+1,len);
+  }
+
+  function playBeep(){
+    if(!el('soundChk').checked) return;
+    try{
+      const ctx = new (window.AudioContext||window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.05, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.15);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime+0.15);
+    }catch(e){}
+  }
+
+  // ---------- API helpers (talk to the local Python bridge server) ----------
+  async function apiPost(path, body){
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body||{})
+    });
+    return res.json();
+  }
+
+  function getTimeoutSetting(){
+    const inputs = document.querySelectorAll('.input-wrap.number input');
+    return parseFloat(inputs[0] && inputs[0].value) || 15;
+  }
+
+  // Generic "send this exact packet string through the bridge" helper,
+  // used by Alert ID quick-sends and the Emergency (EPB) system.
+  async function sendRawPacket(packet, target='primary'){
+    try{
+      const data = await apiPost('/api/send', { packet, target });
+      if(data.ok){ playBeep(); pollState(); return true; }
+      el('footerStatus').textContent = `Send failed [${target}]: ` + (data.error || 'unknown error');
+      pollState();
+      return false;
+    }catch(e){
+      el('footerStatus').textContent = 'Bridge server unreachable — run "python server.py" and open it via http://127.0.0.1:8765';
+      addLocalLog('INFO','SYSTEM','Send failed: could not reach local bridge server (is server.py running?)');
+      return false;
+    }
+  }
+
+  // ---------- Send cycle ----------
+  function sendPacketCycle(){
+    if(!template){
+      el('footerStatus').textContent = 'Send failed: invalid packet format in Packet Input';
+      return;
+    }
+
+    const packet = buildPacketFromTemplate(template, currentFrame);
+
+    // Actually hand the packet to the Python bridge, which owns the real TCP socket.
+    apiPost('/api/send', { packet, target:'primary' })
+      .then(data => {
+        if(data.ok){
+          playBeep();
+        } else {
+          el('footerStatus').textContent = 'Send failed: ' + (data.error || 'unknown error');
+        }
+        pollState();
+      })
+      .catch(() => {
+        el('footerStatus').textContent = 'Bridge server unreachable — run "python server.py" and open it via http://127.0.0.1:8765';
+        addLocalLog('INFO','SYSTEM','Send failed: could not reach local bridge server (is server.py running?)');
+      });
+
+    if(el('autoIncCheck').checked){
+      currentFrame++;
+    }
+    updatePreview(currentFrame);
+  }
+
+  // ---------- Controls ----------
+  el('connectBtn').addEventListener('click', async () => {
+    const host = el('hostInput').value.trim();
+    const port = parseInt(el('portInput').value, 10);
+    el('footerStatus').textContent = `Connecting to ${host}:${port} ...`;
+    try{
+      const data = await apiPost('/api/connect', { target:'primary', host, port, timeout: getTimeoutSetting() });
+      if(!data.ok){
+        el('footerStatus').textContent = 'Connect failed: ' + (data.error || 'unknown error');
+      }
+    }catch(e){
+      el('footerStatus').textContent = 'Bridge server unreachable — run "python server.py" first, then open http://127.0.0.1:8765';
+      addLocalLog('INFO','SYSTEM','Could not reach local bridge server (is server.py running?)');
+    }
+    pollState();
+  });
+
+  el('disconnectBtn').addEventListener('click', async () => {
+    if(sending) stopSending();
+    try{ await apiPost('/api/disconnect', { target:'primary' }); }catch(e){}
+    pollState();
+  });
+
+  el('testConnBtn').addEventListener('click', async () => {
+    const host = el('hostInput').value.trim();
+    const port = parseInt(el('portInput').value, 10);
+    el('footerStatus').textContent = 'Testing Primary connection...';
+    try{
+      const data = await apiPost('/api/test', { host, port, timeout: 5 });
+      el('footerStatus').textContent = data.ok ? 'Primary test connection OK' : 'Primary test connection failed';
+    }catch(e){
+      el('footerStatus').textContent = 'Bridge server unreachable — run "python server.py" first';
+    }
+    pollState();
+  });
+
+  el('emrConnectBtn').addEventListener('click', async () => {
+    const host = el('emrHostInput').value.trim();
+    const port = parseInt(el('emrPortInput').value, 10);
+    el('footerStatus').textContent = `Connecting Emergency server to ${host}:${port} ...`;
+    try{
+      const data = await apiPost('/api/connect', { target:'emergency', host, port, timeout: getTimeoutSetting() });
+      if(!data.ok){
+        el('footerStatus').textContent = 'Emergency connect failed: ' + (data.error || 'unknown error');
+      }
+    }catch(e){
+      el('footerStatus').textContent = 'Bridge server unreachable — run "python server.py" first';
+      addLocalLog('INFO','SYSTEM','Could not reach local bridge server (is server.py running?)');
+    }
+    pollState();
+  });
+
+  el('emrDisconnectBtn').addEventListener('click', async () => {
+    try{ await apiPost('/api/disconnect', { target:'emergency' }); }catch(e){}
+    pollState();
+  });
+
+  el('testEmrConnBtn').addEventListener('click', async () => {
+    const host = el('emrHostInput').value.trim();
+    const port = parseInt(el('emrPortInput').value, 10);
+    el('footerStatus').textContent = 'Testing Emergency connection...';
+    try{
+      const data = await apiPost('/api/test', { host, port, timeout: 5 });
+      el('footerStatus').textContent = data.ok ? 'Emergency test connection OK' : 'Emergency test connection failed';
+    }catch(e){
+      el('footerStatus').textContent = 'Bridge server unreachable — run "python server.py" first';
+    }
+    pollState();
+  });
+
+  async function startSending(){
+    if(!connected){
+      alert('Pehle Connect dabayein — server se real connection hone ke baad hi sending shuru hogi.');
+      return;
+    }
+
+    const parsed = parseTemplate(el('packetInput').value);
+    if(!parsed || parsed.frameIdx < 0){
+      alert('Packet Input mein valid NRM packet paste karein (frame number field detect nahi hua).');
+      return;
+    }
+    template = parsed;
+    currentFrame = parseInt(template.fields[template.frameIdx], 10) || 0;
+
+    sending = true;
+    updateStatusUI();
+
+    // Per spec: a $LGN (Login) packet must always go out BEFORE the first $NRM.
+    el('footerStatus').textContent = 'Sending Login packet ($LGN) before $NRM...';
+    await sendRawPacket(buildLGNPacket(), 'primary');
+
+    el('footerStatus').textContent = 'Sending packets...';
+    sendPacketCycle();
+    const interval = (parseFloat(el('intervalInput').value)||10) * (el('unitSelect').value === 'Minutes' ? 60000 : 1000);
+    sendTimer = setInterval(sendPacketCycle, interval);
+  }
+  function stopSending(){
+    sending = false;
+    updateStatusUI();
+    el('footerStatus').textContent = 'Stopped';
+    if(sendTimer){ clearInterval(sendTimer); sendTimer = null; }
+  }
+  el('startBtn').addEventListener('click', startSending);
+  el('stopBtn').addEventListener('click', stopSending);
+
+  el('manualSpeedCheck').addEventListener('change', () => {
+    el('speedInput').disabled = !el('manualSpeedCheck').checked;
+    if(el('manualSpeedCheck').checked) el('speedInput').focus();
+  });
+  el('speedInput').addEventListener('blur', () => {
+    const formatted = formatSpeed(el('speedInput').value);
+    if(formatted !== null) el('speedInput').value = formatted;
+  });
+
+  el('clearLogBtn').addEventListener('click', () => {
+    logs = [];
+    renderLogs();
+  });
+  el('clearAllBtn').addEventListener('click', async () => {
+    logs = [];
+    renderLogs();
+    // Optimistically zero the pills right away, then confirm with the backend
+    el('statSent').textContent = 0;
+    el('statRecv').textContent = 0;
+    el('statErr').textContent = 0;
+    el('statLast').textContent = '--:--:--';
+    el('statUptime').textContent = '00:00:00';
+    try{ await apiPost('/api/clear_stats', {}); }catch(e){}
+    pollState();
+  });
+
+  el('updateNowBtn').addEventListener('click', () => updatePreview(currentFrame));
+
+  // Tabs
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentTab = tab.dataset.tab;
+      if(currentTab === 'bulk'){
+        el('logTableWrap').style.display = 'none';
+        el('bulkPanelWrap').style.display = '';
+      } else {
+        el('logTableWrap').style.display = '';
+        el('bulkPanelWrap').style.display = 'none';
+        renderLogs();
+      }
+    });
+  });
+
+  // Last packet tabs
+  let lastTxPacket = el('lastPacketText').textContent;
+  let lastRxPacket = '$ACK,NRM,OK,022432*';
+  document.querySelectorAll('.lp-tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.lp-tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      currentLp = t.dataset.lp;
+      el('lastPacketText').textContent = currentLp === 'tx' ? lastTxPacket : lastRxPacket;
+    });
+  });
+
+  el('copyBtn').addEventListener('click', () => {
+    const text = el('lastPacketText').textContent;
+    navigator.clipboard && navigator.clipboard.writeText(text).catch(()=>{});
+    const original = el('copyBtn').innerHTML;
+    el('copyBtn').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Copied';
+    setTimeout(() => { el('copyBtn').innerHTML = original; }, 1200);
+  });
+
+  function setValidBadge(parsed){
+    el('validFormatBadge').style.display = (parsed && parsed.frameIdx >= 0) ? '' : 'none';
+  }
+
+  el('packetInput').addEventListener('input', () => {
+    const parsed = parseTemplate(el('packetInput').value);
+    el('fieldCount').textContent = parsed ? parsed.fields.length : 0;
+    setValidBadge(parsed);
+    renderParsedFields(el('packetInput').value);
+    if(parsed && parsed.frameIdx >= 0 && !sending){
+      template = parsed;
+      currentFrame = parseInt(template.fields[template.frameIdx], 10) || currentFrame;
+      updatePreview(currentFrame);
+    } else if(!parsed){
+      template = null;
+      updatePreview(currentFrame);
+    }
+  });
+
+  el('loadFileBtn').addEventListener('click', () => {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = '.txt,.nrm,.log';
+    inp.onchange = e => {
+      const file = e.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        el('packetInput').value = ev.target.result;
+        // Reparse immediately so the frame number is picked up from the loaded packet
+        const parsed = parseTemplate(el('packetInput').value);
+        el('fieldCount').textContent = parsed ? parsed.fields.length : 0;
+        setValidBadge(parsed);
+        renderParsedFields(el('packetInput').value);
+        if(parsed && parsed.frameIdx >= 0){
+          template = parsed;
+          currentFrame = parseInt(template.fields[template.frameIdx], 10) || currentFrame;
+          updatePreview(currentFrame);
+        }
+      };
+      reader.readAsText(file);
+    };
+    inp.click();
+  });
+
+  // keep last packet text updated to whichever tab is active whenever a new TX/RX occurs
+  const baseRenderLogs = renderLogs;
+  function syncLastPackets(){
+    for(let i = logs.length -1; i>=0; i--){
+      if(logs[i].type === 'TX'){ lastTxPacket = logs[i].message; break; }
+    }
+    for(let i = logs.length -1; i>=0; i--){
+      if(logs[i].type === 'RX'){ lastRxPacket = logs[i].message; break; }
+    }
+    el('lastPacketText').textContent = currentLp === 'tx' ? lastTxPacket : lastRxPacket;
+  }
+  renderLogs = function(){
+    baseRenderLogs();
+    syncLastPackets();
+  };
+
+  // ---------- Polling: pulls real connection state / logs / stats from server.py ----------
+  async function pollState(){
+    try{
+      const res = await fetch(`/api/state?since=${lastLogId}`);
+      if(!res.ok) throw new Error('bad status');
+      const data = await res.json();
+
+      connected = !!data.connected;
+      if(connected){ serverHost = data.host; serverPort = data.port; }
+
+      if(data.emergency){
+        emrConnected = !!data.emergency.connected;
+        if(emrConnected){ emrServerHost = data.emergency.host; emrServerPort = data.emergency.port; }
+      }
+
+      if(data.logs && data.logs.length){
+        data.logs.forEach(l => {
+          logs.push(l);
+          if(l.id > lastLogId) lastLogId = l.id;
+        });
+        if(logs.length > 500) logs = logs.slice(-500);
+      }
+
+      el('statSent').textContent = data.stats.sent;
+      el('statRecv').textContent = data.stats.recv;
+      el('statErr').textContent = data.stats.errors;
+      el('statLast').textContent = data.stats.last_sent || '--:--:--';
+      el('statUptime').textContent = formatUptime(data.uptime_seconds || 0);
+
+      updateStatusUI();
+      renderLogs();
+
+      if(!sending){
+        el('footerStatus').textContent = connected ? 'Connected' : 'Ready';
+      }
+    }catch(e){
+      connected = false;
+      emrConnected = false;
+      updateStatusUI();
+      el('footerStatus').textContent = 'Bridge server unreachable — run "python server.py", then open http://127.0.0.1:8765';
+    }
+  }
+
+  // ==========================================================================
+  // SIDEBAR (LEFT PANEL) OPEN / CLOSE
+  // --------------------------------------------------------------------------
+  // How it works:
+  //   1. .app is a CSS grid: `grid-template-columns: var(--col-left-w) 1fr var(--col-third-w)`.
+  //   2. Clicking #sidebarToggleBtn toggles the ".sidebar-collapsed" class on
+  //      .app. That class (see CSS) sets the left track to 0px and hides
+  //      .col-left, so the middle column expands to fill the freed space.
+  //   3. The collapsed/open state is remembered in localStorage so it stays
+  //      the same the next time the page is opened.
+  // ==========================================================================
+  function toggleSidebar(){
+    const app = document.querySelector('.app');
+    const collapsed = app.classList.toggle('sidebar-collapsed');
+    const icon = document.getElementById('sidebarToggleIcon');
+    if(icon) icon.style.transform = collapsed ? 'rotate(180deg)' : 'rotate(0deg)';
+    try{ localStorage.setItem('nrm_sidebar_collapsed', collapsed ? '1' : '0'); }catch(e){}
+  }
+
+  function initSidebarToggle(){
+    const btn = document.getElementById('sidebarToggleBtn');
+    if(!btn) return;
+    btn.addEventListener('click', toggleSidebar);
+    try{
+      if(localStorage.getItem('nrm_sidebar_collapsed') === '1'){
+        document.querySelector('.app').classList.add('sidebar-collapsed');
+        const icon = document.getElementById('sidebarToggleIcon');
+        if(icon) icon.style.transform = 'rotate(180deg)';
+      }
+    }catch(e){}
+  }
+
+  // ---------- Init ----------
+  updateStatusUI();
+  initSidebarToggle();
+  (function initTemplateFromTextarea(){
+    const parsed = parseTemplate(el('packetInput').value);
+    if(parsed && parsed.frameIdx >= 0){
+      template = parsed;
+      currentFrame = parseInt(template.fields[template.frameIdx], 10) || currentFrame;
+    }
+  })();
+  updatePreview(currentFrame);
+  el('fieldCount').textContent = template ? template.fields.length : 0;
+  setValidBadge(template);
+  renderParsedFields(el('packetInput').value);
+  renderAlertList();
+  el('emrToggleBtn').addEventListener('click', () => {
+    if(emergencyActive) emergencyOff(); else emergencyOn();
+  });
+  renderLogs();
+
+  pollState();
+  setInterval(pollState, 700);
+  setInterval(() => updatePreview(currentFrame), 1000);
+
+  // Panel collapse toggle
+  document.querySelectorAll('.panel-header').forEach(h => {
+    h.style.cursor = 'pointer';
+    h.addEventListener('click', () => {
+      const body = h.nextElementSibling;
+      const chev = h.querySelector('.chev');
+      if(body.style.display === 'none'){
+        body.style.display = '';
+        chev.style.transform = 'rotate(0deg)';
+      } else {
+        body.style.display = 'none';
+        chev.style.transform = 'rotate(180deg)';
+      }
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
